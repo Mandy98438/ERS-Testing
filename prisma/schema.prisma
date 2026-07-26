@@ -1,0 +1,202 @@
+// Motor Testing Pipeline — core data model
+// Postgres in production. For local/demo use, set DATABASE_URL to a
+// Postgres instance (Supabase / Neon / Railway all have free tiers).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  TECHNICIAN
+  ENGINEER
+  ADMIN
+}
+
+enum MotorType {
+  DC_SHUNT
+  DC_SERIES
+  DC_COMPOUND
+  AC_SQIM
+  AC_SRIM
+}
+
+enum Stage {
+  PRE
+  INTERMEDIATE
+  FINAL
+}
+
+enum TestStatus {
+  PENDING
+  PASS
+  FAIL
+}
+
+enum JobStatus {
+  IN_PROGRESS
+  ON_HOLD_FAILED_TEST
+  CLEARED
+  DESPATCHED
+}
+
+model Organization {
+  id        String       @id @default(cuid())
+  name      String
+  createdAt DateTime     @default(now())
+  users     User[]
+  motors    Motor[]
+  jobs      Job[]
+  equipment Equipment[]
+}
+
+model User {
+  id             String       @id @default(cuid())
+  employeeId     String       @unique
+  passwordHash   String
+  name           String
+  role           Role         @default(TECHNICIAN)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime     @default(now())
+
+  testRecords    TestRecord[] @relation("PerformedBy")
+  reviewedTests  TestRecord[] @relation("ReviewedBy")
+  leadOnJobs     Job[]        @relation("LeadEngineer")
+}
+
+// ─── Motor ───────────────────────────────────────────────────────────────
+// The physical machine, identified by its nameplate. Captured ONCE, on the
+// first job it's ever brought in for. Every later job for the same motor
+// (repeat repair, routine overhaul, etc.) links back here instead of
+// re-entering nameplate data — this is what makes "auto-fill from nameplate"
+// and "full history of this specific motor" possible.
+model Motor {
+  id               String       @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+
+  // Nameplate data — entered once, auto-fills every future job
+  serialNumber     String       // physical nameplate serial / asset tag — unique per org
+  manufacturer     String?
+  motorType        MotorType
+  ratedVoltageV    Float
+  ratedCurrentA    Float
+  ratedPowerKW     Float
+  ratedSpeedRpm    Float
+  poles            Int?
+  frequencyHz      Float?
+  connection       String?      // Star / Delta, for AC motors
+  insulationClass  String?      // B, F, H
+
+  // Free-text location context (which plant section/line this motor drives)
+  location         String?
+
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  jobs             Job[]
+
+  @@unique([organizationId, serialNumber])
+}
+
+// ─── Job ─────────────────────────────────────────────────────────────────
+// One visit / one testing session for a Motor. A single Motor can have many
+// Jobs over its life — that sequence of Jobs IS the motor's history.
+model Job {
+  id             String       @id @default(cuid())
+  jobNumber      String       @unique // client-facing "Project ID"
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  motorId        String
+  motor          Motor        @relation(fields: [motorId], references: [id])
+
+  reasonForEntry String       // new winding / repair / rectification / routine overhaul
+  status         JobStatus    @default(IN_PROGRESS)
+  currentStage   Stage        @default(PRE)
+
+  // Filled in as the job closes out — this is the substance of "history"
+  faultsFound       String?   // what was wrong, in plain language
+  repairsPerformed  String?   // what was done about it
+  closedAt          DateTime?
+
+  leadEngineerId String?
+  leadEngineer   User?        @relation("LeadEngineer", fields: [leadEngineerId], references: [id])
+
+  // Client portal access: client enters jobNumber + accessCode to view
+  // status only (no test data, no internal notes). accessCode is generated
+  // on job creation and handed to the client, e.g. printed on the intake slip.
+  accessCode     String
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  testRecords    TestRecord[]
+
+  @@index([motorId])
+}
+
+model TestRecord {
+  id            String        @id @default(cuid())
+  jobId         String
+  job           Job           @relation(fields: [jobId], references: [id])
+
+  // References a test id from the pipeline config (lib/pipelines/*)
+  testId        String
+  testReference TestReference @relation(fields: [testId], references: [id])
+  stage         Stage
+
+  status        TestStatus @default(PENDING)
+  // Raw field values entered by the technician, keyed by field id
+  values        Json
+  // Computed values (auto-calculated from formulas), keyed by output id
+  computed      Json?
+  notes         String?
+
+  equipmentId   String?
+  equipment     Equipment? @relation(fields: [equipmentId], references: [id])
+
+  performedById String
+  performedBy   User       @relation("PerformedBy", fields: [performedById], references: [id])
+
+  reviewedById  String?
+  reviewedBy    User?      @relation("ReviewedBy", fields: [reviewedById], references: [id])
+
+  signedOff     Boolean    @default(false)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@unique([jobId, testId])
+}
+
+model Equipment {
+  id                String       @id @default(cuid())
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id])
+  name              String       // e.g. "Megger MIT525", "HV Test Set"
+  serialNumber      String
+  calibrationDueOn  DateTime
+  createdAt         DateTime     @default(now())
+  testRecords       TestRecord[]
+}
+
+model TestReference {
+  id               String       @id
+  category         String       // test_procedure, equation, standard, reliability_data
+  machineType      String       // DC, AC_SQIM, AC_SRIM, DC_GENERATOR, GENERAL
+  testStage        String       // PRE_TEST, INTERMEDIATE, FINAL, REFERENCE
+  title            String
+  description      String
+  sciencePrinciple String?
+  formula          String?
+  passFailCriteria String?
+  source           String?
+  tags             String[]
+
+  testRecords      TestRecord[]
+}
