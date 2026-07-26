@@ -689,6 +689,8 @@ async function main() {
     },
   ];
 
+  const createdUsers: Record<string, string> = {}; // employeeId -> user.id
+
   for (const u of usersToCreate) {
     const passwordHash = await bcrypt.hash(u.password, 10);
     const user = await prisma.user.create({
@@ -700,8 +702,44 @@ async function main() {
         organizationId: orgId,
       },
     });
+    createdUsers[u.employeeId] = user.id;
     console.log(`Created user: ${user.name} (${user.role})`);
   }
+
+  // 3b. Create a sample Motor + Job so the Client — Check Status portal
+  // has something real to look up (Project ID + access code).
+  const demoMotor = await prisma.motor.create({
+    data: {
+      organizationId: orgId,
+      serialNumber: "MTR-DEMO-001",
+      manufacturer: "BBL Motors",
+      motorType: "AC_SQIM",
+      ratedVoltageV: 415,
+      ratedCurrentA: 42,
+      ratedPowerKW: 22,
+      ratedSpeedRpm: 1440,
+      poles: 4,
+      frequencyHz: 50,
+      connection: "Star",
+      insulationClass: "F",
+      location: "Rolling Mill — Line 2",
+    },
+  });
+  console.log(`Created demo Motor: ${demoMotor.serialNumber}`);
+
+  const demoJob = await prisma.job.create({
+    data: {
+      jobNumber: "PRJ-2026-001",
+      organizationId: orgId,
+      motorId: demoMotor.id,
+      reasonForEntry: "Routine overhaul",
+      status: "IN_PROGRESS",
+      currentStage: "INTERMEDIATE",
+      leadEngineerId: createdUsers["EMP-ENG"],
+      accessCode: "DEMO2026",
+    },
+  });
+  console.log(`Created demo Job: ${demoJob.jobNumber} (access code: ${demoJob.accessCode})`);
 
   // 4. Create Equipment
   const activeDate = new Date();
