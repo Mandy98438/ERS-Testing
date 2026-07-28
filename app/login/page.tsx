@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import ThemeToggle from "@/components/ThemeToggle";
 
-type Tab = "employee" | "client";
+type Tab = "employee" | "client" | "guest";
 
 interface ClientStatus {
   jobNumber: string;
@@ -25,25 +24,13 @@ export default function LoginPage() {
   const [tab, setTab] = useState<Tab>("employee");
 
   return (
-    <div>
-      {/* Top Nav for Login page */}
-      <header
-        className="no-print"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          padding: "16px 24px",
-          borderBottom: "1px solid var(--border-color)",
-          backgroundColor: "var(--bg-secondary)",
-        }}
-      >
-        <span style={{ fontWeight: 700, fontSize: 16, fontFamily: "Playfair Display, serif" }}>
-          ERS PIPELINE
-        </span>
-        <ThemeToggle />
-      </header>
-
+    <div style={{
+      minHeight: "100vh",
+      backgroundImage: "url('/background-pattern.png')",
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+      backgroundRepeat: "no-repeat",
+    }}>
       <main style={{ maxWidth: 420, margin: "60px auto", padding: "0 16px" }}>
         <h1 style={{ fontSize: 24, marginBottom: 8 }}>Motor Testing Pipeline</h1>
         <p style={{ color: "var(--text-secondary)", marginBottom: 24 }}>
@@ -57,9 +44,12 @@ export default function LoginPage() {
           <TabButton active={tab === "client"} onClick={() => setTab("client")}>
             Client — Check Status
           </TabButton>
+          <TabButton active={tab === "guest"} onClick={() => setTab("guest")}>
+            Guest Preview
+          </TabButton>
         </div>
 
-        {tab === "employee" ? <EmployeeLoginForm /> : <ClientStatusForm />}
+        {tab === "employee" ? <EmployeeLoginForm /> : tab === "client" ? <ClientStatusForm /> : <GuestPreviewForm />}
       </main>
     </div>
   );
@@ -238,6 +228,21 @@ function Row({ label, value }: { label: string; value: string }) {
       <span style={{ color: "var(--text-secondary)" }}>{label}</span>
       <span>{value}</span>
     </p>
+  );
+}
+
+function GuestPreviewForm() {
+  const router = useRouter();
+
+  return (
+    <div style={{ textAlign: "center", padding: "20px 0" }}>
+      <p style={{ color: "var(--text-secondary)", marginBottom: 16, fontSize: 14 }}>
+        Browse the pipeline features and view a sample report without signing in.
+      </p>
+      <button onClick={() => router.push("/guest")} style={buttonStyle}>
+        Enter Guest Preview →
+      </button>
+    </div>
   );
 }
 

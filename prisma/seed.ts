@@ -689,8 +689,6 @@ async function main() {
     },
   ];
 
-  const createdUsers: Record<string, string> = {}; // employeeId -> user.id
-
   for (const u of usersToCreate) {
     const passwordHash = await bcrypt.hash(u.password, 10);
     const user = await prisma.user.create({
@@ -702,44 +700,8 @@ async function main() {
         organizationId: orgId,
       },
     });
-    createdUsers[u.employeeId] = user.id;
     console.log(`Created user: ${user.name} (${user.role})`);
   }
-
-  // 3b. Create a sample Motor + Job so the Client — Check Status portal
-  // has something real to look up (Project ID + access code).
-  const demoMotor = await prisma.motor.create({
-    data: {
-      organizationId: orgId,
-      serialNumber: "MTR-DEMO-001",
-      manufacturer: "BBL Motors",
-      motorType: "AC_SQIM",
-      ratedVoltageV: 415,
-      ratedCurrentA: 42,
-      ratedPowerKW: 22,
-      ratedSpeedRpm: 1440,
-      poles: 4,
-      frequencyHz: 50,
-      connection: "Star",
-      insulationClass: "F",
-      location: "Rolling Mill — Line 2",
-    },
-  });
-  console.log(`Created demo Motor: ${demoMotor.serialNumber}`);
-
-  const demoJob = await prisma.job.create({
-    data: {
-      jobNumber: "PRJ-2026-001",
-      organizationId: orgId,
-      motorId: demoMotor.id,
-      reasonForEntry: "Routine overhaul",
-      status: "IN_PROGRESS",
-      currentStage: "INTERMEDIATE",
-      leadEngineerId: createdUsers["EMP-ENG"],
-      accessCode: "DEMO2026",
-    },
-  });
-  console.log(`Created demo Job: ${demoJob.jobNumber} (access code: ${demoJob.accessCode})`);
 
   // 4. Create Equipment
   const activeDate = new Date();
@@ -810,6 +772,196 @@ async function main() {
     });
   }
   console.log(`Seeded ${referencesData.length} TestReferences.`);
+
+  // 6. Create Demo Job for Guest Preview
+  const demoMotor = await prisma.motor.create({
+    data: {
+      serialNumber: "MTR-DEMO-001",
+      manufacturer: "Siemens",
+      motorType: "AC_SQIM",
+      ratedVoltageV: 415,
+      ratedCurrentA: 45,
+      ratedPowerKW: 30,
+      ratedSpeedRpm: 1480,
+      poles: 4,
+      frequencyHz: 50,
+      connection: "STAR",
+      insulationClass: "F",
+      location: "Main Plant Floor 2",
+      organizationId: orgId,
+    },
+  });
+
+  const demoJob = await prisma.job.create({
+    data: {
+      jobNumber: "PRJ-2026-001",
+      accessCode: "DEMO2026",
+      status: "IN_PROGRESS",
+      currentStage: "INTERMEDIATE",
+      reasonForEntry: "Scheduled preventive maintenance after 5 years of continuous operation",
+      faultsFound: null,
+      repairsPerformed: null,
+      closedAt: null,
+      motorId: demoMotor.id,
+      organizationId: orgId,
+      leadEngineerId: (await prisma.user.findFirst({ where: { employeeId: "EMP-ENG" } }))!.id,
+    },
+  });
+
+  // Add some sample test records for the demo job
+  const techUser = await prisma.user.findFirst({ where: { employeeId: "EMP-TECH" } });
+
+  const demoTestRecords = [
+    {
+      jobId: demoJob.id,
+      testId: "ac-pre-01",
+      stage: "PRE" as const,
+      status: "PASS" as const,
+      values: { inspected: true, visualDefects: "" },
+      computed: {},
+      notes: "Nameplate verified, no visible defects",
+      performedById: techUser!.id,
+    },
+    {
+      jobId: demoJob.id,
+      testId: "ac-pre-02",
+      stage: "PRE" as const,
+      status: "PASS" as const,
+      values: {
+        appliedVoltageV: 500,
+        irRToEarthGigaOhms: 2.5,
+        irYToEarthGigaOhms: 2.4,
+        irBToEarthGigaOhms: 2.6,
+        irRYGigaOhms: 2.3,
+        irYBGigaOhms: 2.5,
+        irBRGigaOhms: 2.4,
+      },
+      computed: {},
+      notes: "All IR readings well above minimum",
+      performedById: techUser!.id,
+    },
+    {
+      jobId: demoJob.id,
+      testId: "ac-pre-03",
+      stage: "PRE" as const,
+      status: "PASS" as const,
+      values: { u_resist: 0.15, v_resist: 0.151, w_resist: 0.149 },
+      computed: { maxUnbalancePercent: 0.67 },
+      notes: "Phase resistances balanced within 1%",
+      performedById: techUser!.id,
+    },
+    {
+      jobId: demoJob.id,
+      testId: "ac-int-01",
+      stage: "INTERMEDIATE" as const,
+      status: "PASS" as const,
+      values: {
+        currentU: 12.5,
+        currentV: 12.3,
+        currentW: 12.4,
+        speedRpm: 1485,
+        directionCorrect: true,
+      },
+      computed: { currentUnbalancePercent: 1.6 },
+      notes: "No-load run successful, currents balanced",
+      performedById: techUser!.id,
+    },
+  ];
+
+  for (const record of demoTestRecords) {
+    await prisma.testRecord.create({
+      data: record,
+    });
+  }
+
+  console.log("Created demo job for guest preview.");
+
+  // 7. Create Second Demo Job (DC motor with failed test)
+  const demoMotor2 = await prisma.motor.create({
+    data: {
+      serialNumber: "MTR-DEMO-002",
+      manufacturer: "ABB",
+      motorType: "DC_SHUNT",
+      ratedVoltageV: 220,
+      ratedCurrentA: 85,
+      ratedPowerKW: 15,
+      ratedSpeedRpm: 1500,
+      poles: 4,
+      frequencyHz: null,
+      connection: null,
+      insulationClass: "F",
+      location: "Pump Station B",
+      organizationId: orgId,
+    },
+  });
+
+  const demoJob2 = await prisma.job.create({
+    data: {
+      jobNumber: "PRJ-2026-002",
+      accessCode: "DEMO2026",
+      status: "ON_HOLD_FAILED_TEST",
+      currentStage: "PRE",
+      reasonForEntry: "Emergency repair - motor failed during operation with excessive sparking",
+      faultsFound: "Commutator surface severely pitted, brush holders worn, insulation resistance below minimum",
+      repairsPerformed: "Commutator skimmed and re-insulated, brush holders replaced, winding re-varnished",
+      closedAt: null,
+      motorId: demoMotor2.id,
+      organizationId: orgId,
+      leadEngineerId: (await prisma.user.findFirst({ where: { employeeId: "EMP-ENG" } }))!.id,
+    },
+  });
+
+  // Add test records for the second demo job (with a failure)
+  const demoTestRecords2 = [
+    {
+      jobId: demoJob2.id,
+      testId: "dc-pre-01",
+      stage: "PRE" as const,
+      status: "PASS" as const,
+      values: { inspected: true, visualDefects: "Commutator pitting noted, brush holder wear observed" },
+      computed: {},
+      notes: "Nameplate verified, visual defects documented",
+      performedById: techUser!.id,
+    },
+    {
+      jobId: demoJob2.id,
+      testId: "dc-pre-02",
+      stage: "PRE" as const,
+      status: "FAIL" as const,
+      values: {
+        shaftTurnsFreely: true,
+        airGapUniform: false,
+        commutatorRunoutMm: 0.04,
+        micaUndercutMm: 0.8,
+        brushSpringForceG: 180,
+      },
+      computed: {},
+      notes: "Commutator run-out exceeds 0.025mm limit - requires skimming",
+      performedById: techUser!.id,
+    },
+    {
+      jobId: demoJob2.id,
+      testId: "dc-pre-06",
+      stage: "PRE" as const,
+      status: "FAIL" as const,
+      values: {
+        appliedVoltageV: 500,
+        ir1MinGigaOhms: 0.05,
+        ir10MinGigaOhms: 0.06,
+      },
+      computed: { polarizationIndex: 1.2 },
+      notes: "Insulation resistance below 0.1 GΩ minimum, PI below 1.5",
+      performedById: techUser!.id,
+    },
+  ];
+
+  for (const record of demoTestRecords2) {
+    await prisma.testRecord.create({
+      data: record,
+    });
+  }
+
+  console.log("Created second demo job (DC motor with failed test) for guest preview.");
   console.log("Seeding complete!");
 }
 

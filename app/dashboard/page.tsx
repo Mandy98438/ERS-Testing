@@ -174,7 +174,12 @@ export default function DashboardPage() {
   });
 
   return (
-    <div className="shell-container">
+    <div className="shell-container" style={{
+      backgroundImage: "url('/background-pattern.png')",
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+      backgroundRepeat: "no-repeat",
+    }}>
       {/* Sidebar Navigation */}
       <aside className="sidebar">
         <div>

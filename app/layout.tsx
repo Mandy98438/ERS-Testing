@@ -1,4 +1,5 @@
 import "./globals.css";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export const metadata = {
   title: "Motor Testing Pipeline",
@@ -22,7 +23,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <header
+          className="no-print"
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "16px 24px",
+            borderBottom: "1px solid var(--border-color)",
+            backgroundColor: "var(--bg-secondary)",
+          }}
+        >
+          <span style={{ fontWeight: 700, fontSize: 16, fontFamily: "Playfair Display, serif" }}>
+            ERS PIPELINE
+          </span>
+          <ThemeToggle />
+        </header>
+        {children}
+      </body>
     </html>
   );
 }

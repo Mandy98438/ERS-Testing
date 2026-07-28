@@ -20,10 +20,12 @@
   --pass-bg: #e6f7ed;
   --pass-text: #006622;
   --pass-border: #b3e6c3;
+  --success-color: #006622;
 
   --fail-bg: #feebeb;
   --fail-text: #cc0000;
   --fail-border: #f9c7c7;
+  --fail-color: #cc0000;
 
   --pending-bg: #fff9e6;
   --pending-text: #996600;
@@ -50,10 +52,12 @@
   --pass-bg: #092211;
   --pass-text: #52e896;
   --pass-border: #16532d;
+  --success-color: #52e896;
 
   --fail-bg: #2a0c0c;
   --fail-text: #ff8f8f;
   --fail-border: #5c1616;
+  --fail-color: #ff8f8f;
 
   --pending-bg: #281e05;
   --pending-text: #fcd34d;
